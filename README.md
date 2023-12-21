@@ -2,6 +2,11 @@
 
 Open winmail.dat file (system independet)
 
+## Dependency
+
+* Python 3
+* tnef (https://linux.die.net/man/1/tnef)
+
 ## Installation
 
 ### Linux
@@ -34,7 +39,7 @@ winmail-view /path/to/winmail.dat
 ```
 
 ### Windows
+
 ```shell
 python winmail-view /path/to/winmail.dat
 ```
-
