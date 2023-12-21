@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+# Python 3
+
+__author__ = "Anatolij Rau"
+__copyright__ = "Copyright 2023, COMLOG Gesellschaft für Computer integrierte Logistiklösungen mbH"
+__credits__ = ["Anatolij Rau"]
+__license__ = "GPL3"
+__version__ = "1.0.0"
+__maintainer__ = "Rob Knight"
+__email__ = "info@comlog.org"
+__status__ = "Production"
+
+import sys
+import os
+import tempfile
+import time
+import math
+import shutil
+import subprocess
+import platform
+import re
+
+
+tnef = shutil.which("tnef")
+
+if tnef is None:
+	print("Please install tnef tool:")
+	print("Web: https://github.com/verdammelt/tnef")
+	print("Debian / Ubuntu / Mint: sudo apt install tnef")
+	sys.exit(2)
+
+if len(sys.argv) > 1: 
+	print("ARG 1: " + sys.argv[1])
+else:
+	print("Dateipfad ist nicht festgelegt!")
+	sys.exit(1)
+
+def uniqid(prefix='', more_entropy=False):
+    m = time.time()
+    sec = math.floor(m)
+    usec = math.floor(1000000 * (m - sec))
+    if more_entropy:
+        lcg = random.random()
+        the_uniqid = "%08x%05x%.8F" % (sec, usec, lcg * 10)
+    else:
+        the_uniqid = '%8x%05x' % (sec, usec)
+
+    the_uniqid = prefix + the_uniqid
+    return the_uniqid
+
+def openFile(filepath):
+	if platform.system() == 'Darwin':       # macOS
+		subprocess.call(('open', filepath))
+	elif platform.system() == 'Windows':    # Windows
+		os.startfile(filepath)
+	else:                                   # linux variants
+		subprocess.call(('xdg-open', filepath))
+
+
+# Tempordner anlegen
+tempDir = tempfile.gettempdir()
+targetDir = tempDir + os.sep + str(uniqid('winmail_'))
+winmail = os.path.abspath(sys.argv[1])
+
+print(targetDir)
+os.mkdir(targetDir)
+
+pout = subprocess.Popen([tnef,"--save-body", winmail], stdout=subprocess.PIPE, cwd=targetDir).stdout.read().decode('utf-8', errors="replace"); 
+
+if pout != "":
+	print("********** tnef **********")
+	print(pout)
+	print("**************************")
+
+msgFile = targetDir + os.sep + "message.html"
+print (msgFile)
+
+if os.path.isfile(msgFile):
+	# Lesen
+	f = open(msgFile, 'rb')
+	data = f.read()
+	f.close()
+	# Ersetzten
+	#data = data.replace(b'src="cid:', b'src="file://' + bytes(targetDir + os.sep, 'utf-8'))
+	data = re.sub(bytes('(src=[\'"])(cid:)([^\'"]+)([@][^\'"]+)(")', 'ascii'), b"\\1\\3\\5", data)
+	data = re.sub(bytes('(src=[\'"])(cid:)([^\'"]+)(")', 'ascii'), b"\\1./\\3\\4", data)
+
+	extraBody = "<fieldset style=\"margin-top: 10px\"><legend>Attachments</legend>"
+	for att in os.listdir(targetDir):
+		if att == 'message.html': continue
+		att_name, att_extension = os.path.splitext(att)
+		extraBody += '<a style="text-align:center; margin-right: 5px; background: lightgray;padding: 5px;display: inline-block;border: 1px solid grey;" href="./'+att+'" target="_blank">'
+		if att_extension.upper() in [".JPG",".PNG", ".BMP"]:
+			extraBody += '<img src="'+att+'" style="max-width:50px; max-height:50px:"><br>'+att+'</a>'
+		else:
+			extraBody += att+'</a>'
+
+	if data.find(b'</body>') > -1:
+		data = data.replace(b'</body>', b'</body>' + bytes(extraBody, 'utf-8'))
+	
+	if data.find(b'</BODY>') > -1:
+		data = data.replace(b'</BODY>', b'</BODY>' + bytes(extraBody, 'utf-8'))
+	
+	extraBody = "</fieldset>"
+
+	# Schreiben
+	f = open(msgFile, 'wb')
+	f.write(data)
+	f.close()
+
+	openFile(msgFile)
+else:
+	print(Exception('There has been an error in the system'))
