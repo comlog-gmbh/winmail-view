@@ -20,7 +20,6 @@ import subprocess
 import platform
 import re
 
-
 tnef = shutil.which("tnef")
 
 if tnef is None:
